@@ -14,13 +14,33 @@
 #include <boost/beast/core/error.hpp>
 #include <boost/asio/buffer.hpp>
 
+#include <vector>
+
 namespace boost {
 namespace beast {
 namespace json {
 
-template<class Derived>
-class basic_parser
+namespace detail {
+
+struct parser_base
 {
+    static
+    bool
+    is_ws(char c) noexcept;
+
+    static
+    bool
+    is_digit(char c) noexcept;
+};
+
+} // detail
+
+template<class Derived>
+class basic_parser : private detail::parser_base
+{
+protected:
+    basic_parser();
+
 public:
     template<class ConstBufferSequence>
     void
@@ -42,7 +62,15 @@ private:
         json,
         element,
         ws,
-        value
+        value,
+        object,
+        array_,
+        string,
+        number,
+        true_1,  true_2,  true_3,
+        false_1, false_2, false_3, false_4,
+        null_1,  null_2,  null_3,
+        end
     };
 
     Derived&
@@ -54,7 +82,13 @@ private:
     void
     write(char const* it, std::size_t len, error_code& ec);
 
-    state st_;
+    state current_state() const noexcept;
+    void push_state(state st);
+    void pop_state();
+    void set_state(state st);
+
+    std::vector<state> st_stack_;
+
 };
 
 } // json

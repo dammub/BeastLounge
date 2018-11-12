@@ -85,7 +85,7 @@ private:
     state current_state() const noexcept;
     void push_state(state st);
     void pop_state();
-    void set_state(state st);
+    void replace_state(state st);
 
     std::vector<state> st_stack_;
 

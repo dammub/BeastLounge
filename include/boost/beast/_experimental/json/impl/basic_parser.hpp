@@ -10,6 +10,7 @@
 #ifndef BOOST_BEAST_JSON_IMPL_BASIC_PARSER_HPP
 #define BOOST_BEAST_JSON_IMPL_BASIC_PARSER_HPP
 
+#include <boost/beast/_experimental/json/error.hpp>
 #include <boost/beast/core/buffers_range.hpp>
 #include <boost/assert.hpp>
 
@@ -173,6 +174,17 @@ void
 basic_parser<Derived>::
 write_eof(error_code& ec)
 {
+    switch(current_state())
+    {
+    case state::ws:
+    case state::end:
+        break;
+
+    default:
+        ec = error::syntax;
+        return;
+    }
+    ec.assign(0, ec.category());
 }
 
 template<class Derived>
@@ -188,13 +200,11 @@ write(char const* it, std::size_t len, error_code& ec)
         switch(current_state())
         {
         case state::json:
-            pop_state();
-            push_state(state::element);
+            replace_state(state::element);
             break;
 
         case state::element:
-            pop_state();
-            push_state(state::ws);
+            replace_state(state::ws);
             push_state(state::value);
             push_state(state::ws);
             break;
@@ -229,28 +239,28 @@ write(char const* it, std::size_t len, error_code& ec)
             // number
             case '0': case '1': case '2': case '3': case '4':
             case '5': case '6': case '7': case '8': case '9':
+                break;
 
             // true
             case 't':
                 ++it;
-                set_state(state::true_1);
+                replace_state(state::true_1);
                 break;
 
             // false
             case 'f':
                 ++it;
-                set_state(state::false_1);
+                replace_state(state::false_1);
                 break;
 
             // null
             case 'n':
                 ++it;
-                set_state(state::null_1);
+                replace_state(state::null_1);
                 break;
 
             default:
-                // syntax error
-                //ec = ...;
+                ec = error::syntax;
                 break;
             }
             goto loop;
@@ -263,27 +273,27 @@ write(char const* it, std::size_t len, error_code& ec)
         case state::true_1:
             if(*it != 'r')
             {
-                // ec = ...;
+                ec = error::syntax;
                 return;
             }
             ++it;
-            set_state(state::true_2);
+            replace_state(state::true_2);
             break;
 
         case state::true_2:
             if(*it != 'u')
             {
-                // ec = ...;
+                ec = error::syntax;
                 return;
             }
             ++it;
-            set_state(state::true_3);
+            replace_state(state::true_3);
             break;
 
         case state::true_3:
             if(*it != 'e')
             {
-                // ec = ...;
+                ec = error::syntax;
                 return;
             }
             ++it;
@@ -300,47 +310,85 @@ write(char const* it, std::size_t len, error_code& ec)
         case state::false_1:
             if(*it != 'a')
             {
-                // ec = ...;
+                ec = error::syntax;
                 return;
             }
             ++it;
-            set_state(state::false_2);
+            replace_state(state::false_2);
             break;
 
         case state::false_2:
             if(*it != 'l')
             {
-                // ec = ...;
+                ec = error::syntax;
                 return;
             }
             ++it;
-            set_state(state::false_3);
+            replace_state(state::false_3);
             break;
 
         case state::false_3:
             if(*it != 's')
             {
-                // ec = ...;
+                ec = error::syntax;
                 return;
             }
             ++it;
-            set_state(state::false_4);
+            replace_state(state::false_4);
             break;
 
         case state::false_4:
             if(*it != 'e')
             {
-                // ec = ...;
+                ec = error::syntax;
                 return;
             }
             ++it;
             impl().on_false(ec);
             if(ec)
                 return;
+            pop_state();
             break;
+
+        //
+        // null
+        //
+
+        case state::null_1:
+            if(*it != 'u')
+            {
+                ec = error::syntax;
+                return;
+            }
+            ++it;
+            replace_state(state::null_2);
+            break;
+
+        case state::null_2:
+            if(*it != 'l')
+            {
+                ec = error::syntax;
+                return;
+            }
+            ++it;
+            replace_state(state::null_3);
+            break;
+
+        case state::null_3:
+            if(*it != 'l')
+            {
+                ec = error::syntax;
+                return;
+            }
+            ++it;
+            impl().on_null(ec);
+            if(ec)
+                return;
+            pop_state();
+            break;
+
         }
     }
-    return;
 }
 
 //------------------------------------------------------------------------------
@@ -376,7 +424,7 @@ pop_state()
 template<class Derived>
 void
 basic_parser<Derived>::
-set_state(state st)
+replace_state(state st)
 {
     BOOST_ASSERT(! st_stack_.empty());
     st_stack_.back() = st;

@@ -41,6 +41,11 @@ public:
         on_false(error_code& ec)
         {
         }
+
+        void
+        on_null(error_code& ec)
+        {
+        }
     };
 
     void
@@ -55,15 +60,46 @@ public:
                 test_parser p;
                 p.write(boost::asio::const_buffer(
                     s.data(), s.size()), ec);
-                if(this->expect(! ec, ec.message(), __FILE__, __LINE__))
+                if(this->expect(! ec, s, __FILE__, __LINE__))
                 {
                     p.write_eof(ec);
-                    this->expect(! ec, ec.message(), __FILE__, __LINE__);
+                    this->expect(! ec, s, __FILE__, __LINE__);
+                }
+            };
+
+        auto const bad =
+            [this](string_view s)
+            {
+                error_code ec;
+                test_parser p;
+                p.write(boost::asio::const_buffer(
+                    s.data(), s.size()), ec);
+                if(! ec)
+                {        
+                    p.write_eof(ec);
+                    this->expect(ec, ec.message(), __FILE__, __LINE__);
+                }
+                else
+                {
+                    this->pass();
                 }
             };
 
         good("true");
         good("false");
+        good("null");
+
+        bad("truu");
+        bad("tu");
+        bad("t");
+
+        bad("fals");
+        bad("fel");
+        bad("f");
+
+        bad("nul");
+        bad("no");
+        bad("n");
     }
 
     void run() override

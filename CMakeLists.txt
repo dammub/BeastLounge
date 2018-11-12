@@ -7,7 +7,8 @@
 # Official repository: https://github.com/boostorg/beast
 #
 
-cmake_minimum_required (VERSION 3.10 FATAL_ERROR)
+cmake_minimum_required (VERSION 3.13 FATAL_ERROR)
+cmake_policy (SET CMP0074 NEW)
 
 project (beast-lounge VERSION 0.1.0 LANGUAGES CXX)
 
@@ -39,6 +40,12 @@ link_directories (${Boost_LIBRARY_DIRS})
 file (GLOB_RECURSE BEAST_FILES
   ${Boost_INCLUDE_DIRS}/boost/beast/*.hpp
   ${Boost_INCLUDE_DIRS}/boost/beast/*.ipp)
+
+file (GLOB_RECURSE BEAST_EXTRA_FILES
+  ${PROJECT_SOURCE_DIR}/include/boost/beast/*.hpp
+  ${PROJECT_SOURCE_DIR}/include/boost/beast/*.ipp)
+
+include_directories (${PROJECT_SOURCE_DIR}/include)
 
 add_subdirectory (server)
 add_subdirectory (test)

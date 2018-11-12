@@ -11,15 +11,17 @@ set (TEST_MAIN ${Boost_INCLUDE_DIRS}/boost/beast/_experimental/unit_test/main.cp
 
 file (GLOB APP_FILES
     Jamfile
-    json.cpp
+    basic_parser.cpp
 )
 
 source_group (TREE ${Boost_INCLUDE_DIRS}/boost/beast PREFIX beast FILES ${BEAST_FILES})
+source_group (TREE ${PROJECT_SOURCE_DIR}/include/boost/beast PREFIX beast FILES ${BEAST_EXTRA_FILES})
 source_group ("" FILES ${TEST_MAIN})
 source_group ("" FILES ${APP_FILES})
 
 add_executable (tests
     ${BEAST_FILES}
+    ${BEAST_EXTRA_FILES}
     ${TEST_MAIN}
     ${APP_FILES}
 )

@@ -33,17 +33,42 @@ public:
         test_parser() = default;
 
         void
-        on_true(error_code& ec)
+        on_object_begin(error_code&)
         {
         }
 
         void
-        on_false(error_code& ec)
+        on_object_end(error_code&)
         {
         }
 
         void
-        on_null(error_code& ec)
+        on_array_begin(error_code&)
+        {
+        }
+
+        void
+        on_array_end(error_code&)
+        {
+        }
+
+        void
+        on_string_begin(error_code&)
+        {
+        }
+
+        void
+        on_true(error_code&)
+        {
+        }
+
+        void
+        on_false(error_code&)
+        {
+        }
+
+        void
+        on_null(error_code&)
         {
         }
     };
@@ -85,7 +110,15 @@ public:
                 }
             };
 
+        good("{}");
+
         good("true");
+        good(" true");
+        good("true ");
+        good("\ttrue");
+        good("true\t");
+        good("\r\n\t true\r\n\t ");
+
         good("false");
         good("null");
 

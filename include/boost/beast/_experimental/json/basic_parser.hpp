@@ -47,11 +47,7 @@ public:
     write(ConstBufferSequence const& buffers, error_code& ec);
 
     void
-    write(boost::asio::const_buffer buffer, error_code& ec)
-    {
-        write(static_cast<char const*>(
-            buffer.data()), buffer.size(), ec);
-    }
+    write(boost::asio::const_buffer buffer, error_code& ec);
 
     void
     write_eof(error_code& ec);
@@ -63,13 +59,15 @@ private:
         element,
         ws,
         value,
-        object,
+
+        object, member, members, colon,
         array_,
         string,
         number,
-        true_1,  true_2,  true_3,
-        false_1, false_2, false_3, false_4,
-        null_1,  null_2,  null_3,
+        true_1,  true_2,  true_3,  true_4,
+       false_1, false_2, false_3, false_4, false_5,
+        null_1,  null_2,  null_3,  null_4,
+
         end
     };
 
@@ -78,9 +76,6 @@ private:
     {
         return *static_cast<Derived*>(this);
     }
-
-    void
-    write(char const* it, std::size_t len, error_code& ec);
 
     state current_state() const noexcept;
     void push_state(state st);

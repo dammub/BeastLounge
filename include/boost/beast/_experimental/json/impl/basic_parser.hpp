@@ -130,10 +130,10 @@ parser_base::
 is_ws(char c) noexcept
 {
     return
-        c == '\0x20' ||
-        c == '\0x0d' ||
-        c == '\0x0a' ||
-        c == '\0x09';
+        c == ' '  ||
+        c == '\r' ||
+        c == '\n' ||
+        c == '\t';
 }
 
 inline
@@ -160,12 +160,387 @@ void
 basic_parser<Derived>::
 write(ConstBufferSequence const& buffers, error_code& ec)
 {
-    ec.assign(0, ec.category());
     for(auto const b : beast::buffers_range(buffers))
     {
         write(b, ec);
         if(ec)
             return;
+    }
+}
+
+template<class Derived>
+void
+basic_parser<Derived>::
+write(boost::asio::const_buffer buffer, error_code& ec)
+{
+    auto p = static_cast<char const*>(buffer.data());
+    auto n = buffer.size();
+    auto const p0 = p;
+    auto const p1 = p0 + n;
+    ec.assign(0, ec.category());
+    BOOST_ASSERT(current_state() != state::end);
+loop:
+    switch(current_state())
+    {
+    case state::json:
+        replace_state(state::element);
+        goto loop;
+
+    case state::element:
+        replace_state(state::ws);
+        push_state(state::value);
+        push_state(state::ws);
+        goto loop;
+
+    case state::ws:
+        while(p < p1)
+        {
+            if(! is_ws(*p))
+            {
+                pop_state();
+                goto loop;
+            }
+            ++p;
+        }
+        break;
+
+    case state::value:
+    {
+        if(p >= p1)
+            break;
+        switch(*p)
+        {
+        // object
+        case '{':
+            ++p;
+            replace_state(state::object);
+            impl().on_object_begin(ec);
+            if(ec)
+                return;
+            goto loop;
+
+        // array
+        case '[':
+            ++p;
+            replace_state(state::array_);
+            impl().on_array_begin(ec);
+            goto loop;
+
+        // string
+        case '"':
+            ++p;
+            replace_state(state::string);
+            impl().on_string_begin(ec);
+            goto loop;
+
+        // number
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
+            // store *p
+            ++p;
+            replace_state(state::number);
+            goto loop;
+
+        // true
+        case 't':
+            if(p + 4 <= p1)
+            {
+                if(
+                    p[1] != 'r' ||
+                    p[2] != 'u' ||
+                    p[3] != 'e')
+                {
+                    ec = error::syntax;
+                    return;
+                }
+                p = p + 4;
+                replace_state(state::true_4);
+                goto loop;
+            }
+            ++p;
+            replace_state(state::true_1);
+            goto loop;
+
+        // false
+        case 'f':
+            if(p + 5 <= p1)
+            {
+                if(
+                    p[1] != 'a' ||
+                    p[2] != 'l' ||
+                    p[3] != 's' ||
+                    p[4] != 'e')
+                {
+                    ec = error::syntax;
+                    return;
+                }
+                p = p + 4;
+                replace_state(state::false_5);
+                goto loop;
+            }
+            ++p;
+            replace_state(state::false_1);
+            goto loop;
+
+        // null
+        case 'n':
+            if(p + 4 <= p1)
+            {
+                if(
+                    p[1] != 'u' ||
+                    p[2] != 'l' ||
+                    p[3] != 'l')
+                {
+                    ec = error::syntax;
+                    return;
+                }
+                p = p + 4;
+                replace_state(state::null_4);
+                goto loop;
+            }
+            ++p;
+            replace_state(state::null_1);
+            goto loop;
+
+        default:
+            ec = error::syntax;
+            return;
+        }
+        break;
+    }
+
+    //
+    // object
+    //
+
+    case state::object:
+        if(p >= p1)
+            break;
+        if(is_ws(*p))
+        {
+            ++p;
+            push_state(state::ws);
+            goto loop;
+        }
+        if(*p == '}')
+        {
+            ++p;
+            impl().on_object_end(ec);
+            if(ec)
+                return;
+            pop_state();
+            goto loop;
+        }
+        replace_state(state::member);
+        BOOST_FALLTHROUGH;
+
+    case state::member:
+        replace_state(state::members);
+        push_state(state::element);
+        push_state(state::colon);
+        push_state(state::ws);
+        push_state(state::string);
+        goto loop;
+
+    case state::members:
+        if(*p != '}')
+        {
+            break;
+        }
+        ++p;
+        impl().on_object_end(ec);
+        if(ec)
+            return;
+        break;
+
+    case state::colon:
+        if(p >= p1)
+            break;
+        if(*p != ':')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        pop_state();
+        goto loop;
+
+    //
+    // array
+    //
+
+    case state::array_:
+        break;
+
+    //
+    // string
+    //
+
+    case state::string:
+        break;
+
+    //
+    // number
+    //
+
+    case state::number:
+        break;
+
+    //
+    // true
+    //
+
+    case state::true_1:
+        if(p >= p1)
+            break;
+        if(*p != 'r')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::true_2);
+        BOOST_FALLTHROUGH;
+
+    case state::true_2:
+        if(p >= p1)
+            break;
+        if(*p != 'u')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::true_3);
+        BOOST_FALLTHROUGH;
+
+    case state::true_3:
+        if(p >= p1)
+            break;
+        if(*p != 'e')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::true_4);
+        BOOST_FALLTHROUGH;
+
+    case state::true_4:
+        impl().on_true(ec);
+        if(ec)
+            return;
+        pop_state();
+        goto loop;
+
+    //
+    // false
+    //
+
+    case state::false_1:
+        if(p >= p1)
+            break;
+        if(*p != 'a')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::false_2);
+        BOOST_FALLTHROUGH;
+
+    case state::false_2:
+        if(p >= p1)
+            break;
+        if(*p != 'l')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::false_3);
+        BOOST_FALLTHROUGH;
+
+    case state::false_3:
+        if(p >= p1)
+            break;
+        if(*p != 's')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::false_4);
+        BOOST_FALLTHROUGH;
+
+    case state::false_4:
+        if(p >= p1)
+            break;
+        if(*p != 'e')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::false_5);
+        BOOST_FALLTHROUGH;
+
+    case state::false_5:
+        impl().on_false(ec);
+        if(ec)
+            return;
+        pop_state();
+        goto loop;
+
+    //
+    // null
+    //
+
+    case state::null_1:
+        if(p >= p1)
+            break;
+        if(*p != 'u')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::null_2);
+        BOOST_FALLTHROUGH;
+
+    case state::null_2:
+        if(p >= p1)
+            break;
+        if(*p != 'l')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::null_3);
+        BOOST_FALLTHROUGH;
+
+    case state::null_3:
+        if(p >= p1)
+            break;
+        if(*p != 'l')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::null_4);
+        BOOST_FALLTHROUGH;
+
+    case state::null_4:
+        impl().on_null(ec);
+        if(ec)
+            return;
+        pop_state();
+        goto loop;
+
+    case state::end:
+        break;
     }
 }
 
@@ -185,210 +560,6 @@ write_eof(error_code& ec)
         return;
     }
     ec.assign(0, ec.category());
-}
-
-template<class Derived>
-void
-basic_parser<Derived>::
-write(char const* it, std::size_t len, error_code& ec)
-{
-    auto const last = it + len;
-
-    while(it < last)
-    {
-    loop:
-        switch(current_state())
-        {
-        case state::json:
-            replace_state(state::element);
-            break;
-
-        case state::element:
-            replace_state(state::ws);
-            push_state(state::value);
-            push_state(state::ws);
-            break;
-
-        case state::ws:
-            do
-            {
-                if(is_ws(*it))
-                    continue;
-                pop_state();
-                goto loop;
-            }
-            while(++it < last);
-            break;
-
-        case state::value:
-        {
-            switch(*it)
-            {
-            // object
-            case '{':
-                break;
-
-            // array
-            case '[':
-                break;
-
-            // string
-            case '"':
-                break;
-
-            // number
-            case '0': case '1': case '2': case '3': case '4':
-            case '5': case '6': case '7': case '8': case '9':
-                break;
-
-            // true
-            case 't':
-                ++it;
-                replace_state(state::true_1);
-                break;
-
-            // false
-            case 'f':
-                ++it;
-                replace_state(state::false_1);
-                break;
-
-            // null
-            case 'n':
-                ++it;
-                replace_state(state::null_1);
-                break;
-
-            default:
-                ec = error::syntax;
-                break;
-            }
-            goto loop;
-        }
-
-        //
-        // true
-        //
-
-        case state::true_1:
-            if(*it != 'r')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            replace_state(state::true_2);
-            break;
-
-        case state::true_2:
-            if(*it != 'u')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            replace_state(state::true_3);
-            break;
-
-        case state::true_3:
-            if(*it != 'e')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            impl().on_true(ec);
-            if(ec)
-                return;
-            pop_state();
-            break;
-
-        //
-        // false
-        //
-
-        case state::false_1:
-            if(*it != 'a')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            replace_state(state::false_2);
-            break;
-
-        case state::false_2:
-            if(*it != 'l')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            replace_state(state::false_3);
-            break;
-
-        case state::false_3:
-            if(*it != 's')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            replace_state(state::false_4);
-            break;
-
-        case state::false_4:
-            if(*it != 'e')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            impl().on_false(ec);
-            if(ec)
-                return;
-            pop_state();
-            break;
-
-        //
-        // null
-        //
-
-        case state::null_1:
-            if(*it != 'u')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            replace_state(state::null_2);
-            break;
-
-        case state::null_2:
-            if(*it != 'l')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            replace_state(state::null_3);
-            break;
-
-        case state::null_3:
-            if(*it != 'l')
-            {
-                ec = error::syntax;
-                return;
-            }
-            ++it;
-            impl().on_null(ec);
-            if(ec)
-                return;
-            pop_state();
-            break;
-
-        }
-    }
 }
 
 //------------------------------------------------------------------------------

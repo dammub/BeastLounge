@@ -58,6 +58,11 @@ public:
         }
 
         void
+        on_string_end(error_code&)
+        {
+        }
+
+        void
         on_true(error_code&)
         {
         }
@@ -74,43 +79,62 @@ public:
     };
 
     void
+    good(string_view s)
+    {
+        error_code ec;
+        test_parser p;
+        p.write(boost::asio::const_buffer(
+            s.data(), s.size()), ec);
+        if(BEAST_EXPECT(! ec))
+        {
+            p.write_eof(ec);
+            if(BEAST_EXPECT(! ec))
+                return;
+        }
+        log << "fail: \"" << s << "\"\n";
+    }
+
+    void
+    bad(string_view s)
+    {
+        error_code ec;
+        test_parser p;
+        p.write(boost::asio::const_buffer(
+            s.data(), s.size()), ec);
+        if(! ec)
+        {        
+            p.write_eof(ec);
+            if(BEAST_EXPECT(ec))
+                return;
+        }
+        else
+        {
+            pass();
+            return;
+        }
+        log << "fail: \"" << s << "\"\n";
+    }
+
+    void
+    testString()
+    {
+        good(R"_("")_");
+        good(R"_("x")_");
+        good(R"_("xy")_");
+        good(R"_("x y")_");
+
+        bad (R"_("\t")_");
+
+    }
+
+    void
     testParse()
     {
-        test_parser p;
-
-        auto const good =
-            [this](string_view s)
-            {
-                error_code ec;
-                test_parser p;
-                p.write(boost::asio::const_buffer(
-                    s.data(), s.size()), ec);
-                if(this->expect(! ec, s, __FILE__, __LINE__))
-                {
-                    p.write_eof(ec);
-                    this->expect(! ec, s, __FILE__, __LINE__);
-                }
-            };
-
-        auto const bad =
-            [this](string_view s)
-            {
-                error_code ec;
-                test_parser p;
-                p.write(boost::asio::const_buffer(
-                    s.data(), s.size()), ec);
-                if(! ec)
-                {        
-                    p.write_eof(ec);
-                    this->expect(ec, ec.message(), __FILE__, __LINE__);
-                }
-                else
-                {
-                    this->pass();
-                }
-            };
-
         good("{}");
+        good("{ }");
+        good("{ \t }");
+        good("{ \"x\" : null }");
+        bad ("{{}}");
 
         good("true");
         good(" true");
@@ -118,25 +142,24 @@ public:
         good("\ttrue");
         good("true\t");
         good("\r\n\t true\r\n\t ");
+        bad ("truu");
+        bad ("tu");
+        bad ("t");
 
         good("false");
+        bad ("fals");
+        bad ("fel");
+        bad ("f");
+
         good("null");
-
-        bad("truu");
-        bad("tu");
-        bad("t");
-
-        bad("fals");
-        bad("fel");
-        bad("f");
-
-        bad("nul");
-        bad("no");
-        bad("n");
+        bad ("nul");
+        bad ("no");
+        bad ("n");
     }
 
     void run() override
     {
+        testString();
         testParse();
     }
 };

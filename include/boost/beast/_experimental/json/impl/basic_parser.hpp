@@ -122,31 +122,6 @@ namespace json {
 
 //------------------------------------------------------------------------------
 
-namespace detail {
-
-inline
-bool
-parser_base::
-is_ws(char c) noexcept
-{
-    return
-        c == ' '  ||
-        c == '\r' ||
-        c == '\n' ||
-        c == '\t';
-}
-
-inline
-bool
-parser_base::is_digit(char c) noexcept
-{
-    return static_cast<unsigned char>(c-'0') < 10;
-}
-
-} // detail
-
-//------------------------------------------------------------------------------
-
 template<class Derived>
 basic_parser<Derived>::
 basic_parser()
@@ -213,7 +188,7 @@ loop:
         // object
         case '{':
             ++p;
-            replace_state(state::object);
+            replace_state(state::object1);
             impl().on_object_begin(ec);
             if(ec)
                 return;
@@ -229,8 +204,7 @@ loop:
         // string
         case '"':
             ++p;
-            replace_state(state::string);
-            impl().on_string_begin(ec);
+            replace_state(state::string2);
             goto loop;
 
         // number
@@ -254,11 +228,11 @@ loop:
                     return;
                 }
                 p = p + 4;
-                replace_state(state::true_4);
+                replace_state(state::true4);
                 goto loop;
             }
             ++p;
-            replace_state(state::true_1);
+            replace_state(state::true1);
             goto loop;
 
         // false
@@ -275,11 +249,11 @@ loop:
                     return;
                 }
                 p = p + 4;
-                replace_state(state::false_5);
+                replace_state(state::false5);
                 goto loop;
             }
             ++p;
-            replace_state(state::false_1);
+            replace_state(state::false1);
             goto loop;
 
         // null
@@ -295,11 +269,11 @@ loop:
                     return;
                 }
                 p = p + 4;
-                replace_state(state::null_4);
+                replace_state(state::null4);
                 goto loop;
             }
             ++p;
-            replace_state(state::null_1);
+            replace_state(state::null1);
             goto loop;
 
         default:
@@ -313,45 +287,62 @@ loop:
     // object
     //
 
-    case state::object:
+    case state::object1:
+        replace_state(state::object2);
+        push_state(state::ws);
+        goto loop;
+
+    case state::object2:
         if(p >= p1)
             break;
-        if(is_ws(*p))
-        {
-            ++p;
-            push_state(state::ws);
-            goto loop;
-        }
         if(*p == '}')
         {
             ++p;
-            impl().on_object_end(ec);
-            if(ec)
-                return;
-            pop_state();
+            replace_state(state::object4);
             goto loop;
         }
-        replace_state(state::member);
-        BOOST_FALLTHROUGH;
-
-    case state::member:
-        replace_state(state::members);
+        if(*p != '"')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::object3);
         push_state(state::element);
         push_state(state::colon);
         push_state(state::ws);
-        push_state(state::string);
+        push_state(state::string2);
         goto loop;
 
-    case state::members:
-        if(*p != '}')
-        {
+    case state::object3:
+        if(p >= p1)
             break;
+        if(*p == '}')
+        {
+            ++p;
+            replace_state(state::object4);
+            goto loop;
+        }
+        if(*p != ',')
+        {
+            ec = error::syntax;
+            return;
         }
         ++p;
+        replace_state(state::object3);
+        push_state(state::element);
+        push_state(state::colon);
+        push_state(state::ws);
+        push_state(state::string1);
+        push_state(state::ws);
+        goto loop;
+
+    case state::object4:
         impl().on_object_end(ec);
         if(ec)
             return;
-        break;
+        pop_state();
+        goto loop;
 
     case state::colon:
         if(p >= p1)
@@ -376,8 +367,47 @@ loop:
     // string
     //
 
-    case state::string:
+    case state::string1:
+        if(p >= p1)
+            break;
+        if(*p != '"')
+        {
+            ec = error::syntax;
+            return;
+        }
+        ++p;
+        replace_state(state::string2);
+        BOOST_FALLTHROUGH;
+
+    case state::string2:
+        impl().on_string_begin(ec);
+        if(ec)
+            return;
+        replace_state(state::string3);
+        BOOST_FALLTHROUGH;
+
+    case state::string3:
+    {
+        while(p < p1)
+        {
+            if(*p == '"')
+            {
+                impl().on_string_end(ec);
+                if(ec)
+                    return;
+                ++p;
+                pop_state();
+                goto loop;
+            }
+            if(is_control(*p))
+            {
+                ec = error::syntax;
+                return;
+            }
+            ++p;
+        }
         break;
+    }
 
     //
     // number
@@ -390,7 +420,7 @@ loop:
     // true
     //
 
-    case state::true_1:
+    case state::true1:
         if(p >= p1)
             break;
         if(*p != 'r')
@@ -399,10 +429,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::true_2);
+        replace_state(state::true2);
         BOOST_FALLTHROUGH;
 
-    case state::true_2:
+    case state::true2:
         if(p >= p1)
             break;
         if(*p != 'u')
@@ -411,10 +441,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::true_3);
+        replace_state(state::true3);
         BOOST_FALLTHROUGH;
 
-    case state::true_3:
+    case state::true3:
         if(p >= p1)
             break;
         if(*p != 'e')
@@ -423,10 +453,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::true_4);
+        replace_state(state::true4);
         BOOST_FALLTHROUGH;
 
-    case state::true_4:
+    case state::true4:
         impl().on_true(ec);
         if(ec)
             return;
@@ -437,7 +467,7 @@ loop:
     // false
     //
 
-    case state::false_1:
+    case state::false1:
         if(p >= p1)
             break;
         if(*p != 'a')
@@ -446,10 +476,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::false_2);
+        replace_state(state::false2);
         BOOST_FALLTHROUGH;
 
-    case state::false_2:
+    case state::false2:
         if(p >= p1)
             break;
         if(*p != 'l')
@@ -458,10 +488,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::false_3);
+        replace_state(state::false3);
         BOOST_FALLTHROUGH;
 
-    case state::false_3:
+    case state::false3:
         if(p >= p1)
             break;
         if(*p != 's')
@@ -470,10 +500,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::false_4);
+        replace_state(state::false4);
         BOOST_FALLTHROUGH;
 
-    case state::false_4:
+    case state::false4:
         if(p >= p1)
             break;
         if(*p != 'e')
@@ -482,10 +512,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::false_5);
+        replace_state(state::false5);
         BOOST_FALLTHROUGH;
 
-    case state::false_5:
+    case state::false5:
         impl().on_false(ec);
         if(ec)
             return;
@@ -496,7 +526,7 @@ loop:
     // null
     //
 
-    case state::null_1:
+    case state::null1:
         if(p >= p1)
             break;
         if(*p != 'u')
@@ -505,10 +535,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::null_2);
+        replace_state(state::null2);
         BOOST_FALLTHROUGH;
 
-    case state::null_2:
+    case state::null2:
         if(p >= p1)
             break;
         if(*p != 'l')
@@ -517,10 +547,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::null_3);
+        replace_state(state::null3);
         BOOST_FALLTHROUGH;
 
-    case state::null_3:
+    case state::null3:
         if(p >= p1)
             break;
         if(*p != 'l')
@@ -529,10 +559,10 @@ loop:
             return;
         }
         ++p;
-        replace_state(state::null_4);
+        replace_state(state::null4);
         BOOST_FALLTHROUGH;
 
-    case state::null_4:
+    case state::null4:
         impl().on_null(ec);
         if(ec)
             return;

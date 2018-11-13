@@ -26,11 +26,26 @@ struct parser_base
 {
     static
     bool
-    is_ws(char c) noexcept;
+    is_ws(char c) noexcept
+    {
+        return
+            c == ' '  || c == '\t' ||
+            c == '\r' || c == '\n';
+    }
 
     static
     bool
-    is_digit(char c) noexcept;
+    is_digit(char c) noexcept
+    {
+        return static_cast<unsigned char>(c-'0') < 10;
+    }
+
+    static
+    bool
+    is_control(char c)
+    {
+        return static_cast<unsigned char>(c) < 32;
+    }
 };
 
 } // detail
@@ -60,13 +75,14 @@ private:
         ws,
         value,
 
-        object, member, members, colon,
+        object1, object2, object3, object4, colon,
+
         array_,
-        string,
+        string1, string2, string3,
         number,
-        true_1,  true_2,  true_3,  true_4,
-       false_1, false_2, false_3, false_4, false_5,
-        null_1,  null_2,  null_3,  null_4,
+        true1,   true2,  true3,  true4,
+        false1, false2, false3, false4, false5,
+        null1,   null2,  null3,  null4,
 
         end
     };

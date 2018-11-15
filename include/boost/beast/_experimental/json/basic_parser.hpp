@@ -13,6 +13,7 @@
 #include <boost/beast/core/detail/config.hpp>
 #include <boost/beast/core/error.hpp>
 #include <boost/asio/buffer.hpp>
+#include <cstdint>
 
 #include <vector>
 
@@ -77,12 +78,20 @@ private:
 
         object1, object2, object3, object4, colon,
 
-        array_,
+        array1,  array2,  array3,  array4,
         string1, string2, string3,
+
         number,
-        true1,   true2,  true3,  true4,
-        false1, false2, false3, false4, false5,
-        null1,   null2,  null3,  null4,
+        number_mant1, number_mant2,
+        number_fract1, number_fract2, number_fract3,
+        number_exp,
+        number_exp_sign,
+        number_exp_digits1, number_exp_digits2,
+        number_end,
+
+        true1,   true2,   true3,   true4,
+        false1,  false2,  false3,  false4,  false5,
+        null1,   null2,   null3,   null4,
 
         end
     };
@@ -99,6 +108,10 @@ private:
     void replace_state(state st);
 
     std::vector<state> st_stack_;
+    std::uint64_t m_;
+    long e_;
+    bool neg_;
+    char edir_;
 
 };
 

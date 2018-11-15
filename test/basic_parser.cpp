@@ -58,6 +58,16 @@ public:
         }
 
         void
+        on_string_piece(string_view, error_code&)
+        {
+        }
+
+        void
+        on_number(error_code&)
+        {
+        }
+
+        void
         on_string_end(error_code&)
         {
         }
@@ -116,26 +126,89 @@ public:
     }
 
     void
-    testString()
-    {
-        good(R"_("")_");
-        good(R"_("x")_");
-        good(R"_("xy")_");
-        good(R"_("x y")_");
-
-        bad (R"_("\t")_");
-
-    }
-
-    void
-    testParse()
+    testObject()
     {
         good("{}");
         good("{ }");
         good("{ \t }");
         good("{ \"x\" : null }");
-        bad ("{{}}");
+        good("{ \"x\" : {} }");
+        good("{ \"x\" : { \"y\" : null } }");
 
+        bad ("{");
+        bad ("{{}}");
+    }
+
+    void
+    testArray()
+    {
+        good("[]");
+        good("[ ]");
+        good("[ \t ]");
+        good("[ \"\" ]");
+        good("[ \" \" ]");
+        good("[ \"x\" ]");
+        good("[ \"x\", \"y\" ]");
+        bad ("[");
+        bad ("[ \"x\", ]");
+    }
+
+    void
+    testString()
+    {
+        good("\""   "x"         "\"");
+        good("\""   "xy"        "\"");
+        good("\""   "x y"       "\"");
+
+        bad ("\""   "\t"        "\"");
+    }
+
+    void
+    testNumber()
+    {
+        good("0");
+        good("0.0");
+        good("0.10");
+        good("0.01");
+        good("1");
+        good("10");
+        good("1.5");
+        good("10.5");
+        good("10.25");
+        good("10.25e0");
+        good("1e1");
+        good("1e10");
+        good("1e+0");
+        good("1e+1");
+        good("0e+10");
+        good("0e-0");
+        good("0e-1");
+        good("0e-10");
+        good("1E+1");
+        good("-0");
+        good("-1");
+        good("-1e1");
+
+        bad ("");
+        bad ("-");
+        bad ("00");
+        bad ("00.");
+        bad ("00.0");
+        bad ("1a");
+        bad (".");
+        bad ("1.");
+        bad ("1+");
+        bad ("0.0+");
+        bad ("0.0e+");
+        bad ("0.0e-");
+        bad ("0.0e0-");
+        bad ("0.0e");
+
+    }
+
+    void
+    testMonostates()
+    {
         good("true");
         good(" true");
         good("true ");
@@ -159,8 +232,11 @@ public:
 
     void run() override
     {
+        testObject();
+        testArray();
         testString();
-        testParse();
+        testNumber();
+        testMonostates();
     }
 };
 
